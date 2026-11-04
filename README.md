@@ -1,52 +1,92 @@
-# Open Government
+# Open Government — Reference Digital Government Core Platform
 
-Reference implementation scaffold for **auditable digital public services**, derived from the doctoral framework *Adaptive AI-Assisted Orchestration and Semantic Interoperability for Serverless Microservices in Hybrid Open Industry Ecosystems*.
+A **standard, generic digital government and public services core platform** that any organization in this vertical
+can deploy and adapt: built as **microservices and serverless functions** on
+**Java 21 + Quarkus**, aligned with **The Twelve-Factor App**, documented under the ISO
+architecture and quality standards, and aligned with the domain standards of the
+vertical (see the traceability matrix). Everything is *aligned to* the cited standards —
+**no certification, conformance or regulatory-compliance claim is made**. All data is
+**synthetic**.
 
-> Status: research scaffold. It uses synthetic examples and is not a production certification or regulatory-compliance claim.
+> Reference implementation: small, complete and runnable. The rules that matter in this
+> domain are enforced in code and covered by tests — start with the invariant:
+> payments applied to a public case never exceed its assessed fee — a payment that would overpay is rejected (422) and records nothing; public money movements are always fully evidenced.
 
-## Architecture
+## Standards alignment
 
-The repository applies a provider-neutral, event-aware architecture with:
+| Standard / framework | What it governs here | Where |
+|---|---|---|
+| ISO/IEC/IEEE **42010** | Architecture description | `docs/architecture/architecture-description.md` |
+| ISO/IEC **25010** (SQuaRE) | Product quality model and scenarios | `docs/architecture/quality-attributes.md` |
+| ISO/IEC/IEEE **15288 & 12207** | Life-cycle processes | `docs/lifecycle/software-lifecycle.md` |
+| ISO/IEC **27001 & 27002** | Information security | `docs/security/` |
+| **The Twelve-Factor App** | Cloud-native methodology | `docs/architecture/twelve-factor.md` |
+| W3C DCAT / DCAT-AP | Open data catalogues | Dataset/catalogue posture for transparency outputs |
+| NIST SP 800-53 | Security and privacy controls | Control posture complementing the ISO 27002 mapping |
+| WCAG 2.2 | Accessibility of public services | Accessible contract commitment |
+| ISO 37120 | City service and quality-of-life indicators | Indicator posture for transparency evaluation |
 
-- governed API entry and explicit OpenAPI contracts;
-- CloudEvents and AsyncAPI for asynchronous interoperability;
-- identity, consent, audit, catalog, policy and observability services;
-- Saga, CQRS, Outbox/Inbox, idempotency, Circuit Breaker and DLQ where justified;
-- OpenTelemetry instrumentation and policy-as-code controls;
-- Kubernetes/OpenShift deployment assets without hard-coding one cloud provider.
+Full traceability: `docs/compliance/standards-traceability.md`.
 
-## Repository layout
+## The platform at a glance
 
-| Path | Purpose |
-|---|---|
-| `contracts/` | OpenAPI, AsyncAPI and CloudEvents schemas |
-| `docs/` | Architecture, domain model and ADRs |
-| `examples/` | Synthetic requests and events |
-| `infrastructure/` | Kubernetes/OpenShift and Helm assets |
-| `observability/` | OpenTelemetry configuration |
-| `policies/` | Rego policies for baseline governance |
-| `services/` | Domain and transversal microservices |
-| `tests/` | Contract, integration, resilience and performance tests |
+### Microservices (Quarkus, `services/`)
+
+| Service | Port | Alignment | Responsibility |
+|---|---|---|---|
+| `case-service` | 8081 | Public case management; privacy by design | Citizen case registry; the reference code (folio) is masked at intake. |
+| `fee-service` | 8082 | Public fee integrity | Assessed-fee accounts per case and the payments applied to them. |
+| `eligibility-rules-service` | 8083 | Program rules as auditable decisions | Decision rules binding program types to benefit caps and processing envelopes. |
+| `agency-catalog-service` | 8084 | Government master data | Catalogue of public agencies and their service counts. |
+| `notification-service` | 8085 | Platform support (shared pattern) | Channel-agnostic dispatch of domain notifications from events. |
+
+### Serverless functions (Quarkus Funqy + Knative, `functions/`)
+
+| Function | Trigger | Responsibility |
+|---|---|---|
+| `case-risk-scorer` | Event / HTTP | Scores case risk signals (delay, document gaps, complaints) with an auditable rationale. |
+| `transparency-evaluator` | Event / HTTP | Compares overdue cases and open-data coverage against agency targets; one finding per breach. |
+
+## Design principles
+
+1. **One bounded context per service**, identical hexagonal layout everywhere.
+2. **The domain invariant is code, not prose** — payments applied to a public case never exceed its assessed fee — a payment that would overpay is rejected (422) and records nothing; public money movements are always fully evidenced.
+3. **Privacy by design** — Case reference codes are validated at intake and never stored or returned in clear — only a masked form is kept. Citizen personal data is minimized; all data here is synthetic.
+4. **Database per service, API-first (OpenAPI), events as CloudEvents.**
+5. **Adapt by configuration** — rules, thresholds, tariffs/rates and providers are data
+   and configuration, not code forks (see *Adaptation guide*).
 
 ## Quick start
 
+Prerequisites: Java 21, Maven 3.9+, optionally Docker/Podman and Knative/OpenShift.
+
 ```bash
-make validate
-make test
+mvn verify                                    # build and test everything
+mvn -pl services/case-service quarkus:dev
+docker compose up -d                          # local PostgreSQL, Kafka, Keycloak
 ```
 
-## Core interoperability envelope
+## Deployment
 
-Every request or event should carry `correlation_id`, `causation_id`, `schema_version`, `tenant_id`, purpose and data-classification metadata. Domain data must remain synthetic until an approved privacy and governance process exists.
+- **Kubernetes / OpenShift**: `kubectl apply -k deploy/kubernetes/`.
+- **Serverless**: Knative Services in `deploy/knative/` (scale to zero).
+- **Local**: `docker-compose.yml` for dependencies; services run with `quarkus:dev`.
 
-## Roadmap
+## Adaptation guide
 
-1. Implement the first domain service under `services/`.
-2. Add executable contract tests.
-3. Add a reproducible local event broker profile.
-4. Add OpenShift deployment overlays.
-5. Validate latency, throughput, error rate, trace coverage and recovery.
+| You want to… | Change only… |
+|---|---|
+| Adjust domain rules and thresholds | Rule data in the `eligibility-rules-service` context and function configuration |
+| Change the guarded capacity semantics | The `fee-service` context (invariant stays: never negative) |
+| Plug your IdP / providers | OIDC at the gateway; provider adapters at the boundary |
+| Replace in-memory persistence | The repository port's JPA adapter on the service's own database (`DB_KIND`, `DB_URL`) |
+
+## Documentation map
+
+- Architecture (42010): `docs/architecture/` · Decisions: `docs/adr/`
+- Domain standards: `docs/domain/domain-standards.md`
+- Quality (25010), Security (27001/27002), Life cycle (15288/12207), API, Data, Operations: under `docs/`
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0 — see `LICENSE`.

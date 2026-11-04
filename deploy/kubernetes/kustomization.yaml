@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - case-service.yaml
+  - fee-service.yaml
+  - eligibility-rules-service.yaml
+  - agency-catalog-service.yaml
+  - notification-service.yaml
